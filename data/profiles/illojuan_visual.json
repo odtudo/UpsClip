@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "id": "illojuan_visual",
+  "display_name": "IlloJuan Visual OBS Layouts",
+  "ambiguity_margin": 0.08,
+  "minimum_frame_sharpness": 12.0,
+  "layouts": [
+    {
+      "id": "full_camera_room",
+      "phase": "talking",
+      "source_resolution": {"width": 1920, "height": 1080},
+      "expected_face_region": {"id": "streamer_face", "x": 560, "y": 180, "width": 620, "height": 570},
+      "expected_webcam_region": null,
+      "expected_face_area_ratio": {"min": 0.025, "max": 0.075},
+      "expected_position": "center",
+      "stable_background_regions": [
+        {"id": "left_door", "x": 390, "y": 0, "width": 320, "height": 620, "weight": 1.0},
+        {"id": "right_shelf", "x": 1080, "y": 0, "width": 530, "height": 650, "weight": 1.2},
+        {"id": "top_overlay", "x": 0, "y": 0, "width": 380, "height": 130, "weight": 0.5}
+      ],
+      "reference_images": ["illojuan/full_camera_01.jpg", "illojuan/full_camera_02.jpg"],
+      "weights": {
+        "face_position": 0.15,
+        "face_size": 0.10,
+        "background_similarity": 0.30,
+        "reference_similarity": 0.35,
+        "temporal_stability": 0.10
+      },
+      "minimum_match_score": 0.70,
+      "enabled": true
+    },
+    {
+      "id": "gameplay_left",
+      "phase": "gameplay",
+      "source_resolution": {"width": 1920, "height": 1080},
+      "expected_face_region": {"id": "streamer_face", "x": 80, "y": 350, "width": 300, "height": 310},
+      "expected_webcam_region": {"id": "left_webcam_column", "x": 0, "y": 338, "width": 407, "height": 380},
+      "expected_face_area_ratio": {"min": 0.008, "max": 0.045},
+      "expected_position": "left",
+      "stable_background_regions": [
+        {"id": "webcam_left_door", "x": 0, "y": 338, "width": 145, "height": 300, "weight": 1.0},
+        {"id": "webcam_right_shelf", "x": 315, "y": 338, "width": 92, "height": 300, "weight": 1.2},
+        {"id": "chat_column", "x": 0, "y": 720, "width": 407, "height": 300, "weight": 0.35}
+      ],
+      "reference_images": ["illojuan/gameplay_left_01.jpg"],
+      "weights": {
+        "face_position": 0.18,
+        "face_size": 0.10,
+        "background_similarity": 0.27,
+        "reference_similarity": 0.35,
+        "temporal_stability": 0.10
+      },
+      "minimum_match_score": 0.68,
+      "enabled": true
+    },
+    {
+      "id": "gameplay_small_left",
+      "phase": "gameplay",
+      "source_resolution": {"width": 1280, "height": 720},
+      "expected_face_region": {"id": "streamer_face", "x": 55, "y": 245, "width": 145, "height": 165},
+      "expected_webcam_region": {"id": "small_left_webcam", "x": 15, "y": 230, "width": 210, "height": 220},
+      "expected_face_area_ratio": {"min": 0.0045, "max": 0.015},
+      "expected_position": "left",
+      "stable_background_regions": [
+        {"id": "webcam_left_wall", "x": 18, "y": 235, "width": 55, "height": 180, "weight": 1.0},
+        {"id": "webcam_right_shelf", "x": 175, "y": 235, "width": 45, "height": 180, "weight": 1.2}
+      ],
+      "reference_images": ["illojuan/gameplay_small_left_01.jpg"],
+      "weights": {
+        "face_position": 0.18,
+        "face_size": 0.10,
+        "background_similarity": 0.27,
+        "reference_similarity": 0.35,
+        "temporal_stability": 0.10
+      },
+      "minimum_match_score": 0.68,
+      "enabled": true
+    }
+  ]
+}

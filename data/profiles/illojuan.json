@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "id": "illojuan",
+  "display_name": "IlloJuan",
+  "source_resolution": {"width": 1920, "height": 1080},
+  "layouts": [
+    {
+      "id": "youtube_studio_left_camera",
+      "type": "side_facecam",
+      "position": "left_column",
+      "facecam_region": {"x": 0, "y": 338, "width": 407, "height": 380},
+      "content_region_of_interest": {"x": 407, "y": 0, "width": 1513, "height": 1080}
+    }
+  ],
+  "vertical": {"layout": "face_top_content_bottom", "facecam_height_ratio": 0.38}
+}
