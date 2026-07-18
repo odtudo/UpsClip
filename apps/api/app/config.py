@@ -55,6 +55,25 @@ class Settings(BaseSettings):
     vod_analysis_probe_voice_ratio: float = 0.20
     vod_analysis_probe_min_speech_seconds: float = 2.0
     vod_analysis_sample_timeout_seconds: int = 90
+    vod_topic_analysis_pipeline_version: str = "vod-topic-analysis-v1.1-grounded"
+    vod_topic_analysis_max_seconds: int = 7200
+    whisper_analysis_model: str = "medium"
+    transcription_chunk_seconds: int = 1800
+    transcription_overlap_seconds: int = 15
+    vod_topic_audio_timeout_seconds: int = 900
+    semantic_embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    semantic_window_min_seconds: int = 30
+    semantic_window_target_seconds: int = 60
+    semantic_window_max_seconds: int = 90
+    topic_min_seconds: int = 300
+    topic_target_seconds: int = 720
+    topic_max_seconds: int = 1500
+    candidate_min_seconds: int = 300
+    candidate_target_min_seconds: int = 480
+    candidate_target_max_seconds: int = 900
+    candidate_max_seconds: int = 1200
+    candidate_context_margin_seconds: float = 5.0
+    vod_topic_max_candidates: int = 10
 
     smart_vertical_layout_default: bool = True
     scene_detection_enabled: bool = True
@@ -143,6 +162,28 @@ class Settings(BaseSettings):
             raise ValueError("LAYOUT_SAMPLE_SECONDS must be between 0.5 and 30")
         if not 1 <= self.layout_transition_confirmation <= 20:
             raise ValueError("LAYOUT_TRANSITION_CONFIRMATION must be between 1 and 20")
+        if self.vod_topic_analysis_max_seconds <= 0:
+            raise ValueError("VOD_TOPIC_ANALYSIS_MAX_SECONDS must be positive")
+        if self.transcription_chunk_seconds < 60:
+            raise ValueError("TRANSCRIPTION_CHUNK_SECONDS must be at least 60")
+        if not 0 <= self.transcription_overlap_seconds < self.transcription_chunk_seconds / 2:
+            raise ValueError("TRANSCRIPTION_OVERLAP_SECONDS must be non-negative and below half a chunk")
+        if not (
+            10
+            <= self.semantic_window_min_seconds
+            <= self.semantic_window_target_seconds
+            <= self.semantic_window_max_seconds
+        ):
+            raise ValueError("Semantic window durations must be ordered")
+        if not (self.topic_min_seconds <= self.topic_target_seconds <= self.topic_max_seconds):
+            raise ValueError("Topic durations must be ordered")
+        if not (
+            self.candidate_min_seconds
+            <= self.candidate_target_min_seconds
+            <= self.candidate_target_max_seconds
+            <= self.candidate_max_seconds
+        ):
+            raise ValueError("Candidate durations must be ordered")
         return self
 
     def ensure_directories(self) -> None:
@@ -159,6 +200,7 @@ class Settings(BaseSettings):
             "profiles",
             "smoke_tests",
             "analysis",
+            "analysis/topic_cache",
         ):
             (self.data_dir / child).mkdir(parents=True, exist_ok=True)
         self.database_path.parent.mkdir(parents=True, exist_ok=True)

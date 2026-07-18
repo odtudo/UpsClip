@@ -28,7 +28,9 @@ class JobStore:
 
     def initialize(self) -> None:
         with self.connect() as connection:
-            connection.execute("PRAGMA journal_mode=WAL")
+            # DELETE journaling is deliberately used for the bind-mounted local database.
+            # WAL shared-memory files are not reliable on every rootless Docker filesystem.
+            connection.execute("PRAGMA journal_mode=DELETE")
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS jobs (
@@ -84,6 +86,10 @@ class JobStore:
                 "composition_plan_path": "TEXT",
                 "layout_warnings": "TEXT NOT NULL DEFAULT '[]'",
                 "layout_summary": "TEXT NOT NULL DEFAULT '{}'",
+                "source_job_id": "TEXT",
+                "job_kind": "TEXT NOT NULL DEFAULT 'render'",
+                "workflow_type": "TEXT NOT NULL DEFAULT 'legacy'",
+                "project_id": "TEXT",
             }
             for name, definition in additions.items():
                 if name not in columns:
@@ -305,6 +311,13 @@ class VodAnalysisStore:
                 (cache_key,),
             ).fetchone()
         return self._decode(row)
+
+    def list(self) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM vod_analysis_jobs ORDER BY created_at DESC"
+            ).fetchall()
+        return [decoded for row in rows if (decoded := self._decode(row)) is not None]
 
     def update(self, job_id: str, **values: Any) -> dict[str, Any] | None:
         if not values:

@@ -2,6 +2,65 @@
 
 A deliberately small localhost application for turning one authorized Twitch VOD interval into a previewable MP4 and, only after review, uploading it to your YouTube channel. It uses Next.js, FastAPI, SQLite, yt-dlp, FFmpeg, and the official YouTube Data API.
 
+## Transcript-first Automatic VOD Analysis
+
+Candidate generation uses the grounded pipeline `vod-topic-analysis-v1.1-grounded`. Spanish stream
+fillers and accent-normalized variants are removed before TF-IDF/n-gram keyword extraction. Titles,
+topic labels, summaries and proper nouns must be evidenced by the candidate's exact transcript span;
+the parent topic transcript is never used to title a split candidate. Failed gates are written to
+`rejected_candidates.json`, while accepted score details are written to `score_breakdowns.json`.
+The UI shows opening sentences, distributed representative excerpts, closing sentences, grounding,
+keyword quality, semantic coherence and penalties.
+
+Candidate generation uses the grounded pipeline `vod-topic-analysis-v1.1-grounded`. Spanish stream
+fillers and accent-normalized variants are removed before TF-IDF/n-gram keyword extraction. Titles,
+topic labels, summaries and proper nouns must be evidenced by the candidate's exact transcript span;
+the parent topic transcript is never used to title a split candidate. Failed gates are written to
+`rejected_candidates.json`, while accepted score details are written to `score_breakdowns.json`.
+The UI shows opening sentences, distributed representative excerpts, closing sentences, grounding,
+keyword quality, semantic coherence and penalties.
+
+Choose **Automatic VOD Analysis**, paste an authorized Twitch or YouTube VOD, keep IlloJuan selected,
+and press **Analyze VOD**. It extracts audio only, analyzes up to two hours by default, transcribes
+Spanish in resumable chunks, groups coherent topics, and returns editable clip cards. **Generate
+Clip** reuses the established manual render, silence, Smart Vertical, subtitle, preview, and YouTube
+pipeline.
+
+```dotenv
+VOD_TOPIC_ANALYSIS_MAX_SECONDS=7200
+WHISPER_ANALYSIS_MODEL=medium
+TRANSCRIPTION_CHUNK_SECONDS=1800
+TRANSCRIPTION_OVERLAP_SECONDS=15
+SEMANTIC_EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+```
+
+Models are cached under `data/models`. FastEmbed runs multilingual MiniLM locally through ONNX; no
+paid API is required. The deterministic lexical fallback is recorded when the model is unavailable.
+Stage caches live under `data/analysis/topic_cache` and job artifacts include `metadata.json`, audio,
+raw/clean transcripts, semantic windows, topic blocks, and candidates.
+
+```bash
+# Fixture smoke: no network or models
+PYTHONPATH=. python3 scripts/smoke_topic_analysis.py
+
+# Revalidate a real completed transcript without downloading or running Whisper
+PYTHONPATH=. python3 scripts/smoke_topic_analysis.py \
+  --job-dir data/analysis/JOB_ID --output data/smoke_tests/topic-grounding
+
+# Revalidate a real completed transcript without downloading or running Whisper
+PYTHONPATH=. python3 scripts/smoke_topic_analysis.py \
+  --job-dir data/analysis/JOB_ID --output data/smoke_tests/topic-grounding
+
+# Existing local media: real Whisper
+WHISPER_ANALYSIS_MODEL=small PYTHONPATH=. python3 scripts/smoke_topic_analysis.py \
+  --audio data/work/JOB_ID/source_clip.mp4 --max-seconds 300 \
+  --output data/smoke_tests/topic_audio
+```
+
+VOD Inspector and visual/coarse timelines remain engineering tools, not automatic-analysis
+prerequisites. Whisper names, mixed topics, reactions, music, and editorial boundaries remain
+imperfect; edit the suggested title and timestamps before rendering when needed.
+
 ## What it does
 
 - Accepts Twitch VOD URLs and `MM:SS` or `HH:MM:SS` intervals (30-minute default maximum).
@@ -422,3 +481,71 @@ remain available for later semantic analysis but never decide these visual phase
 - YouTube OAuth/upload: `apps/api/app/services/youtube.py`
 - Frontend page and components: `apps/web/app/page.tsx`, `apps/web/components/`
 - Configuration: `apps/api/app/config.py`, `.env.example`
+
+## Clipping Studio interface
+
+The primary web interface is now a dark, desktop-first clipping studio with three persistent navigation
+areas: **Home**, **Jobs**, and **Settings**. Home starts one of two explicit workflows:
+
+- **Vertical Clip:** Source → Raw Preview → Edit → Render → Review → Publish.
+- **Long-form Clip:** Source → Analyze → Candidates → Raw Preview → Edit → Render → Review → Publish.
+
+Both workflows use the same typed editor. The vertical preset enables Smart Vertical, subtitles,
+silence shortening, normalization, and 9:16 output. The horizontal preset preserves the source layout,
+keeps Smart Vertical disabled, and uses conservative long-form defaults. Candidate selection creates a
+clean raw preview first; it never silently starts the final edit.
+
+Raw previews are ordinary persisted media jobs marked `job_kind=raw_preview`. Final renders reference
+that job with `source_job_id`, so the worker reuses the already trimmed source interval instead of
+downloading it again. `workflow_type` and `project_id` let the Jobs page reconstruct the correct route
+after navigation or refresh. Small, non-sensitive draft settings are mirrored in browser storage; media,
+backend state, credentials, and authoritative job progress remain server-side.
+
+Existing API routes remain authoritative: `POST/GET /jobs` for previews and renders,
+`POST/GET /vod-analysis` for long-form discovery, `GET /jobs/{id}/video` for playback/download,
+`POST /jobs/{id}/youtube` for publishing, and `/setup/status` for local capabilities. The additive
+`GET /vod-analyses` endpoint exposes persisted analysis jobs to the Jobs page. VOD Inspector remains
+available under `/inspector` as an engineering tool and is not part of either user workflow.
+
+Frontend verification commands:
+
+```bash
+npm --prefix apps/web test
+npm --prefix apps/web run lint
+npm --prefix apps/web run typecheck
+npm --prefix apps/web run build
+```
+
+## Clipping Studio interface
+
+The primary web interface is now a dark, desktop-first clipping studio with three persistent navigation
+areas: **Home**, **Jobs**, and **Settings**. Home starts one of two explicit workflows:
+
+- **Vertical Clip:** Source → Raw Preview → Edit → Render → Review → Publish.
+- **Long-form Clip:** Source → Analyze → Candidates → Raw Preview → Edit → Render → Review → Publish.
+
+Both workflows use the same typed editor. The vertical preset enables Smart Vertical, subtitles,
+silence shortening, normalization, and 9:16 output. The horizontal preset preserves the source layout,
+keeps Smart Vertical disabled, and uses conservative long-form defaults. Candidate selection creates a
+clean raw preview first; it never silently starts the final edit.
+
+Raw previews are ordinary persisted media jobs marked `job_kind=raw_preview`. Final renders reference
+that job with `source_job_id`, so the worker reuses the already trimmed source interval instead of
+downloading it again. `workflow_type` and `project_id` let the Jobs page reconstruct the correct route
+after navigation or refresh. Small, non-sensitive draft settings are mirrored in browser storage; media,
+backend state, credentials, and authoritative job progress remain server-side.
+
+Existing API routes remain authoritative: `POST/GET /jobs` for previews and renders,
+`POST/GET /vod-analysis` for long-form discovery, `GET /jobs/{id}/video` for playback/download,
+`POST /jobs/{id}/youtube` for publishing, and `/setup/status` for local capabilities. The additive
+`GET /vod-analyses` endpoint exposes persisted analysis jobs to the Jobs page. VOD Inspector remains
+available under `/inspector` as an engineering tool and is not part of either user workflow.
+
+Frontend verification commands:
+
+```bash
+npm --prefix apps/web test
+npm --prefix apps/web run lint
+npm --prefix apps/web run typecheck
+npm --prefix apps/web run build
+```

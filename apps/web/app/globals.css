@@ -3,32 +3,72 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
-  background: #f4f4f5;
-  color: #18181b;
+  color-scheme: dark;
+  background: #0d1117;
+  color: #e6edf3;
 }
-
 * {
   box-sizing: border-box;
 }
-
+html {
+  background: #0d1117;
+}
 body {
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(circle at 15% 0%, rgba(112, 71, 235, 0.12), transparent 28rem),
-    #f4f4f5;
+  background: #0d1117;
 }
-
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+input,
+textarea,
+select {
+  color-scheme: dark;
+}
 input[type="checkbox"] {
-  accent-color: #7047eb;
+  accent-color: #3b82f6;
 }
-
 button:focus-visible,
+a:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
-select:focus-visible {
-  outline: 3px solid rgba(112, 71, 235, 0.3);
+select:focus-visible,
+summary:focus-visible {
+  outline: 2px solid #60a5fa;
   outline-offset: 2px;
 }
+::selection {
+  background: rgba(59, 130, 246, 0.35);
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
 
+@layer components {
+  .surface {
+    @apply rounded-lg border border-line bg-card;
+  }
+  .field {
+    @apply w-full rounded-md border border-line bg-elevated px-3 py-2.5 text-sm text-primary placeholder:text-muted focus:border-accent;
+  }
+  .button-primary {
+    @apply inline-flex items-center justify-center rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-accentHover disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .button-secondary {
+    @apply inline-flex items-center justify-center rounded-md border border-line bg-panel px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-active disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[.16em] text-accentSoft;
+  }
+}

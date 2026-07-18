@@ -1,6 +1,33 @@
 # Project Context — Twitch VOD Local Clip Editor
 
-## Automatic VOD Analysis — visual OBS phase boundary
+## Automatic VOD Analysis — transcript-first editorial topics (current)
+
+The current quality layer is `vod-topic-analysis-v1.1-grounded`: fixture mode, source fingerprint,
+VOD ID and transcript hash isolate caches; cleaning, keyword extraction, segmentation, topic labels,
+titles and scoring have independent versions. Candidate titles are generated from their exact span,
+validated against literal or conservative lemma evidence, and rejected on unsupported terms. A broad
+Spanish colloquial stopword/filler list feeds TF-IDF 1–3 grams. Rejected candidates remain available
+for engineering inspection but are never returned as UI candidates. The semantic result records the
+requested and effective backend, loaded model and any lexical fallback reason.
+
+Automatic analysis no longer depends on OBS layouts, faces, `coarse_timeline.json`, or
+`phase_timeline.json`. Its authority is `transcript_topics`: yt-dlp resolves metadata and an audio-only
+representation, FFmpeg decodes at most `VOD_TOPIC_ANALYSIS_MAX_SECONDS` to mono 16 kHz PCM,
+faster-whisper transcribes resumable overlapping chunks with absolute word timestamps, and
+conservative cleaning preserves raw and normalized text.
+
+Semantic windows are 30–90 seconds. The preferred local backend is multilingual MiniLM through
+CPU ONNX/FastEmbed; a deterministic multilingual lexical embedding is the offline fallback. Sustained
+semantic/keyword shifts and duration bounds create 5–25 minute topics. Editorial candidates target
+8–15 minutes, are scored and diversified, and keep exact plus safe timestamps. Generate Clip sends
+editable timestamps/title to the existing `/jobs` pipeline.
+
+Caching is staged under `data/analysis/topic_cache`: audio; Whisper chunks; cleaning/embedding/topic
+segmentation; then scoring/diversity. A downstream change never invalidates an expensive upstream
+stage. The visual/coarse systems remain intact for VOD Inspector and future engineering use, but do
+not block or guide Automatic VOD Analysis.
+
+## Legacy Automatic VOD Analysis — visual OBS phase boundary
 
 The UI has separate Manual and Automatic VOD Analysis modes. Manual jobs retain the established
 SQLite `jobs` table and `JobProcessor` render pipeline. Automatic analysis uses a separate
@@ -782,3 +809,21 @@ screenshots supply measured coordinates and references. Cache identity includes 
 hashes of enabled images.
 Legacy phase/layout artifacts remain readable, and coarse audio/VAD/Whisper data is retained for the
 future deep analysis of TALKING blocks; it is not phase input.
+
+---
+
+## 22. Clipping Studio frontend workflow
+
+The former single-page Manual/Automatic/Inspector tab layout has been replaced by a dark application
+shell. The product workflow is now explicit and recoverable:
+
+- manual vertical projects use Source, Raw Preview, shared Edit, Render, Review, and Publish;
+- automatic long-form projects add Analyze and Candidates before the same preview/edit/render path;
+- Jobs lists SQLite-backed media and VOD-analysis jobs; Settings exposes safe setup and OAuth state;
+- VOD Inspector is retained at `/inspector` for engineering validation.
+
+No media pipeline was replaced. A clean raw-preview job runs the existing interval trim with editing
+disabled. A subsequent render can point to that preview through `source_job_id`; the worker validates and
+reuses its `source_clip_path`. The additive `job_kind`, `workflow_type`, and `project_id` fields are
+migrated onto old SQLite databases and default legacy rows safely. The browser stores only compact draft
+choices; backend jobs and artifacts remain authoritative.

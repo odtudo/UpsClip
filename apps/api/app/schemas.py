@@ -19,12 +19,14 @@ class JobCreate(BaseModel):
     streamer_profile: str = "auto"
     demo: bool = False
     youtube_title: str | None = Field(default=None, min_length=1, max_length=100)
+    source_job_id: str | None = None
+    job_kind: Literal["raw_preview", "render"] = "render"
+    workflow_type: Literal["vertical_manual", "longform_automatic", "legacy"] = "legacy"
+    project_id: str | None = None
 
     @model_validator(mode="after")
-    def require_vertical_subtitles(self) -> "JobCreate":
-        if self.output_format == "vertical":
-            self.generate_subtitles = True
-        else:
+    def constrain_layout_options(self) -> "JobCreate":
+        if self.output_format != "vertical":
             self.smart_vertical_layout = False
             self.streamer_profile = "auto"
         return self
@@ -92,6 +94,10 @@ class JobResponse(BaseModel):
     youtube_video_id: str | None = None
     youtube_url: str | None = None
     video_url: str | None = None
+    source_job_id: str | None = None
+    job_kind: Literal["raw_preview", "render"] = "render"
+    workflow_type: Literal["vertical_manual", "longform_automatic", "legacy"] = "legacy"
+    project_id: str | None = None
     created_at: datetime
     updated_at: datetime
 

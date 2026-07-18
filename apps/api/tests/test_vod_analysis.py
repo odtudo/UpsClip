@@ -5,7 +5,7 @@ from apps.api.app.main import create_app
 from apps.api.app.services.vod_analysis.analyzer import VodAnalysisAnalyzer
 from apps.api.app.services.vod_analysis.cache import build_cache_key, parse_source_identity
 from apps.api.app.services.vod_analysis.profiles import ILLOJUAN, get_analysis_profile
-from apps.api.app.services.vod_analysis.schemas import PhasedAnalysisResult, PhaseWindow
+from apps.api.app.services.vod_analysis.schemas import PhaseWindow, TopicAnalysisResult
 
 
 def test_parse_twitch_and_youtube_urls() -> None:
@@ -75,23 +75,21 @@ def test_fixture_analyzer_persists_result_and_debug_artifacts(test_settings) -> 
             "pipeline_version": settings.vod_analysis_pipeline_version,
             "cache_key": "fixture-key",
             "fixture_mode": True,
+            "phase_detection_strategy": "transcript_topics",
+            "requires_coarse_timeline": False,
         }
     )
     VodAnalysisAnalyzer(store, settings).process(job["id"])
     completed = store.get(job["id"])
     assert completed is not None and completed["status"] == "completed"
-    result = PhasedAnalysisResult.model_validate(completed["result"])
-    assert result.phase_detection_strategy == "profile_layout_match"
+    result = TopicAnalysisResult.model_validate(completed["result"])
+    assert result.analysis_strategy == "transcript_topics"
     assert result.requires_coarse_timeline is False
-    assert result.coarse_timeline is None
-    assert [item.phase for item in result.phase_timeline.segments] == [
-        "waiting_or_music",
-        "talking",
-        "gameplay",
-    ]
+    assert "coarse_timeline" not in completed["result"]
+    assert result.candidates
     artifact_dir = settings.data_dir / "analysis" / job["id"]
-    assert (artifact_dir / "phase_timeline.json").is_file()
-    assert (artifact_dir / "layout_timeline.json").is_file()
+    assert (artifact_dir / "transcript_clean.json").is_file()
+    assert (artifact_dir / "topic_blocks.json").is_file()
     assert not (artifact_dir / "coarse_timeline.json").exists()
 
 
@@ -115,7 +113,7 @@ def test_vod_analysis_api_progress_result_and_cache(test_settings) -> None:
         completed = client.get(f"/vod-analysis/{job_id}")
         assert completed.status_code == 200
         assert completed.json()["status"] == "completed"
-        assert completed.json()["result"]["phase"] == "visual_layout"
+        assert completed.json()["result"]["analysis_strategy"] == "transcript_topics"
         assert completed.json()["result"]["requires_coarse_timeline"] is False
         assert str(settings.data_dir) not in completed.text
 

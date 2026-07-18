@@ -250,10 +250,10 @@ def test_real_analyzer_persists_progress_and_resumes(test_settings, tmp_path: Pa
 
     with (
         patch(
-            "apps.api.app.services.vod_analysis.analyzer.inspect_analysis_metadata",
+            "apps.api.app.services.vod_analysis.visual_analyzer.inspect_analysis_metadata",
             return_value=(_metadata(), raw),
         ),
-        patch("apps.api.app.services.vod_analysis.analyzer.extract_layout_frames", fake_frames),
+            patch("apps.api.app.services.vod_analysis.visual_analyzer.extract_layout_frames", fake_frames),
         patch(
             "apps.api.app.services.smart_vertical.face_detection.OpenCVFaceDetector",
             NoFaceDetector,

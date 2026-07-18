@@ -37,7 +37,7 @@ def test_create_and_retrieve_job(test_settings) -> None:
         assert [job["id"] for job in listed.json()] == [created["id"]]
 
 
-def test_vertical_jobs_force_subtitles(test_settings) -> None:
+def test_vertical_jobs_respect_optional_subtitles(test_settings) -> None:
     app = create_app(test_settings)
     with TestClient(app) as client:
         app.state.processor.submit = lambda job_id: None
@@ -53,7 +53,7 @@ def test_vertical_jobs_force_subtitles(test_settings) -> None:
             },
         )
         assert response.status_code == 202
-        assert response.json()["generate_subtitles"] is True
+        assert response.json()["generate_subtitles"] is False
         assert response.json()["smart_vertical_layout"] is True
 
 
@@ -136,3 +136,86 @@ def test_setup_status_hides_paths_and_detects_missing_oauth(test_settings) -> No
         assert payload["smart_vertical_available"] is False
         assert payload["smart_vertical_ready"] is False
         assert str(test_settings.data_dir) not in response.text
+
+
+def test_studio_preview_and_render_jobs_are_related(test_settings) -> None:
+    app = create_app(test_settings)
+    with TestClient(app) as client:
+        app.state.processor.submit = lambda job_id: None
+        preview_response = client.post(
+            "/jobs",
+            json={
+                "source_url": "https://www.twitch.tv/videos/123456789",
+                "start": "00:10",
+                "end": "00:20",
+                "remove_silences": False,
+                "normalize_audio": False,
+                "output_format": "horizontal",
+                "job_kind": "raw_preview",
+                "workflow_type": "vertical_manual",
+            },
+        )
+        assert preview_response.status_code == 202
+        preview = preview_response.json()
+        app.state.store.update(
+            preview["id"], status="ready", source_clip_path="/data/work/source.mp4"
+        )
+        render_response = client.post(
+            "/jobs",
+            json={
+                "source_url": "https://www.twitch.tv/videos/123456789",
+                "start": "00:10",
+                "end": "00:20",
+                "output_format": "vertical",
+                "source_job_id": preview["id"],
+                "job_kind": "render",
+                "workflow_type": "vertical_manual",
+                "project_id": preview["id"],
+            },
+        )
+        assert render_response.status_code == 202
+        render = render_response.json()
+        assert render["source_job_id"] == preview["id"]
+        assert render["project_id"] == preview["id"]
+        assert render["job_kind"] == "render"
+        assert render["generate_subtitles"] is False
+
+
+def test_studio_render_rejects_unready_preview(test_settings) -> None:
+    app = create_app(test_settings)
+    with TestClient(app) as client:
+        app.state.processor.submit = lambda job_id: None
+        preview = client.post(
+            "/jobs",
+            json={
+                "source_url": "https://www.twitch.tv/videos/123456789",
+                "start": "00:00",
+                "end": "00:10",
+                "job_kind": "raw_preview",
+            },
+        ).json()
+        response = client.post(
+            "/jobs",
+            json={
+                "source_url": "https://www.twitch.tv/videos/123456789",
+                "start": "00:00",
+                "end": "00:10",
+                "source_job_id": preview["id"],
+            },
+        )
+        assert response.status_code == 409
+        assert response.json()["detail"] == "Raw preview is not ready yet"
+
+
+def test_vod_analyses_can_be_listed_for_job_recovery(test_settings) -> None:
+    app = create_app(test_settings)
+    with TestClient(app) as client:
+        app.state.processor.submit_vod_analysis = lambda job_id: None
+        created = client.post(
+            "/vod-analysis",
+            json={"url": "https://www.twitch.tv/videos/123456789", "streamer": "illojuan"},
+        )
+        assert created.status_code == 202
+        listed = client.get("/vod-analyses")
+        assert listed.status_code == 200
+        assert listed.json()[0]["id"] == created.json()["job_id"]

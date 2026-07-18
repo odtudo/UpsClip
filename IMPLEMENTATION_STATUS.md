@@ -1,5 +1,35 @@
 # Implementation status
 
+## 2026-07-15 — Transcript-first Automatic VOD Analysis
+
+### 2026-07-16 grounding correction
+
+- [x] Diagnosed real job `b312177b-03d1-45e9-9832-715c5a0c26c8`: a duration split inherited the
+  parent topic transcript, allowing its earlier GTA 6 mention to title an unrelated IA/artists span.
+- [x] Candidate-specific transcript grounding for titles, summaries, entities and keywords.
+- [x] Accent-normalized Spanish colloquial stopwords/fillers plus TF-IDF 1–3 gram extraction.
+- [x] Distributed representative sentences and opening/representative/closing UI preview.
+- [x] Conservative quality gates, severe penalties, `rejected_candidates.json` and score explanations.
+- [x] Cache separation includes fixture mode, source fingerprint, VOD ID, transcript hash and versioned
+  keyword/segmentation/label/title/scoring stages; audio and valid Whisper chunks remain reusable.
+- [x] Effective MiniLM/fallback metadata is persisted instead of reporting the requested model blindly.
+
+- [x] Automatic jobs use `transcript_topics`; Inspector remains `profile_layout_match`.
+- [x] No layout, face, coarse timeline, or phase timeline prerequisite.
+- [x] Bounded audio-only extraction as mono 16 kHz PCM.
+- [x] faster-whisper `medium` default, Spanish VAD, word timestamps, and absolute offsets.
+- [x] 30-minute chunks, 15-second overlap, incremental cache/resume and deduplication.
+- [x] Non-destructive raw/clean transcripts.
+- [x] 30–90 second semantic windows and 5–25 minute topic blocks.
+- [x] Local multilingual MiniLM using FastEmbed/ONNX with offline deterministic fallback.
+- [x] Editorial candidates with safe timestamps, scoring, titles, summaries and diversity.
+- [x] Editable candidate cards reuse `/jobs` for rendering.
+- [x] Independent audio/transcription/segmentation/candidate fingerprints.
+- [x] Fixture and local real-audio smoke; visual/coarse/Inspector compatibility retained.
+
+Topic selection remains heuristic rather than human-equivalent. Empty candidate results are valid;
+proper names, mixed conversations, reactions, music, and abrupt topic boundaries remain limitations.
+
 ## 2026-07-15 — Visual OBS layout phase detector
 
 - [x] Phase decisions use only video layout; Whisper, VAD, transcripts, audio, embeddings, LLMs and
@@ -275,3 +305,20 @@ docker compose restart api
 - Remaining validation boundary: enable other gameplay variants only after collecting rights-cleared real
   screenshots. Brief unmatched intervals inside gameplay remain visible as WAITING rather than being
   force-filled; they need additional references only after visual review confirms a stable OBS layout.
+
+## Clipping Studio redesign (2026-07-17)
+
+- Replaced the white, tab-based home screen with a consistent dark shell, responsive sidebar, topbar,
+  Home workflow cards, persistent Jobs view, Settings, and a retained engineering Inspector route.
+- Added routed Vertical and Long-form workflows with accessible steppers and recoverable job/analysis IDs.
+- Added a shared typed clip editor with Vertical Short, Horizontal Long-form, and Clean Export presets.
+- Added explicit RAW review before editing, dedicated progress, final video review, download, and a common
+  Publish panel. YouTube uses the existing OAuth/upload API; Instagram and TikTok are honest disabled
+  placeholders.
+- Added additive SQLite/API fields `job_kind`, `workflow_type`, `project_id`, and `source_job_id`.
+  Final render jobs reuse the raw preview interval rather than downloading Twitch again.
+- Added `GET /vod-analyses` for persistent automatic-analysis recovery. Legacy jobs remain readable.
+- Centralized typed HTTP errors, timeouts, abortable polling, timestamp validation, video presentation,
+  and compact non-secret browser draft persistence.
+- Frontend component suite covers 25 workflow, validation, editor, polling, publish, recovery, theme, and
+  accessibility scenarios. Backend API tests cover preview/render relationships and analysis listing.

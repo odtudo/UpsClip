@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 
 from .config import Settings
@@ -86,7 +87,26 @@ class JobProcessor:
 
         requested_duration = float(job["end_seconds"] - job["start_seconds"])
         uploader: str | None = None
-        if job["demo"] or self.settings.demo_mode:
+        source_job = self.store.get(job["source_job_id"]) if job.get("source_job_id") else None
+        reusable_source = source_job.get("source_clip_path") if source_job else None
+        if reusable_source:
+            reusable_path = safe_data_path(reusable_source, self.settings.data_dir)
+            if not reusable_path.is_file():
+                raise RuntimeError("Raw preview source file is missing")
+            self._step(job_id, "trimming", 42, "Reusing approved raw preview")
+            try:
+                os.link(reusable_path, source_clip)
+            except OSError:
+                import shutil
+
+                shutil.copy2(reusable_path, source_clip)
+            source_duration = media_duration(source_clip, self.settings)
+            self.store.update(
+                job_id,
+                source_clip_path=str(source_clip),
+                source_title=source_job.get("source_title"),
+            )
+        elif job["demo"] or self.settings.demo_mode:
             self._step(job_id, "downloading", 15, "Generating demo media", source_title="Local FFmpeg demo")
             create_demo_clip(source_clip, requested_duration, self.settings)
             source_duration = media_duration(source_clip, self.settings)

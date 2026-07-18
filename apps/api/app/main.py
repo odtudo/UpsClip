@@ -30,6 +30,7 @@ from .services.vod_analysis.schemas import (
     VodAnalysisStartResponse,
     VodInspectorResponse,
 )
+from .services.vod_analysis.topic_cache import topic_cache_keys
 from .services.vod_inspector import export_report, prepare_inspector, save_notes
 from .timecodes import validate_interval
 from .worker import JobProcessor
@@ -125,24 +126,72 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             profile = get_analysis_profile(payload.streamer)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        cache_key = layout_cache_key(identity.platform, identity.vod_id, profile.id, configured)
+        cache_key = topic_cache_keys(
+            identity, profile.id, configured, source_url=str(payload.url)
+        )["candidates"]
         if not payload.force_reanalyze:
             cached_job = analysis_store.find_cached(cache_key)
             cached_result = cached_job.get("result") if cached_job is not None else None
-            phase_cache_ready = (
+            topic_cache_ready = (
                 cached_job is not None
                 and isinstance(cached_result, dict)
-                and cached_result.get("phase_detection_strategy") == "profile_layout_match"
-                and cached_result.get("pipeline_version") == configured.vod_analysis_phase_pipeline_version
+                and cached_result.get("analysis_strategy") == "transcript_topics"
+                and cached_result.get("pipeline_version") == configured.vod_topic_analysis_pipeline_version
             )
             fixture_cache_ready = (
                 configured.vod_analysis_fixture_mode
                 and cached_job is not None
                 and isinstance(cached_result, dict)
                 and cached_result.get("fixture") is True
-                and cached_result.get("pipeline_version") == configured.vod_analysis_phase_pipeline_version
+                and cached_result.get("pipeline_version") == configured.vod_topic_analysis_pipeline_version
             )
-            if phase_cache_ready or fixture_cache_ready:
+            if topic_cache_ready or fixture_cache_ready:
+                analysis_store.update(cached_job["id"], cached=1)
+                return VodAnalysisStartResponse(job_id=cached_job["id"], cached=True)
+        job_id = str(uuid.uuid4())
+        analysis_store.create(
+            {
+                "id": job_id,
+                "source_url": str(payload.url),
+                "source_platform": identity.platform,
+                "source_vod_id": identity.vod_id,
+                "streamer_profile": profile.id,
+                "pipeline_version": configured.vod_topic_analysis_pipeline_version,
+                "cache_key": cache_key,
+                "fixture_mode": configured.vod_analysis_fixture_mode,
+                "phase_detection_strategy": "transcript_topics",
+                "requires_coarse_timeline": False,
+            }
+        )
+        request.app.state.processor.submit_vod_analysis(job_id)
+        return VodAnalysisStartResponse(job_id=job_id, cached=False)
+
+    @application.get("/vod-analysis/{job_id}", response_model=VodAnalysisJobResponse)
+    def get_vod_analysis(job_id: str) -> VodAnalysisJobResponse:
+        job = analysis_store.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="VOD analysis job not found")
+        return VodAnalysisJobResponse.model_validate(job)
+
+    @application.get("/vod-analyses", response_model=list[VodAnalysisJobResponse])
+    def list_vod_analyses() -> list[VodAnalysisJobResponse]:
+        return [VodAnalysisJobResponse.model_validate(job) for job in analysis_store.list()]
+
+    @application.post(
+        "/vod-inspector",
+        response_model=VodAnalysisStartResponse,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    def create_vod_inspector(payload: VodAnalysisCreate, request: Request) -> VodAnalysisStartResponse:
+        try:
+            identity = parse_source_identity(str(payload.url))
+            profile = get_analysis_profile(payload.streamer)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        cache_key = layout_cache_key(identity.platform, identity.vod_id, profile.id, configured)
+        if not payload.force_reanalyze:
+            cached_job = analysis_store.find_cached(cache_key)
+            if cached_job is not None:
                 analysis_store.update(cached_job["id"], cached=1)
                 return VodAnalysisStartResponse(job_id=cached_job["id"], cached=True)
         job_id = str(uuid.uuid4())
@@ -162,21 +211,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         request.app.state.processor.submit_vod_analysis(job_id)
         return VodAnalysisStartResponse(job_id=job_id, cached=False)
-
-    @application.get("/vod-analysis/{job_id}", response_model=VodAnalysisJobResponse)
-    def get_vod_analysis(job_id: str) -> VodAnalysisJobResponse:
-        job = analysis_store.get(job_id)
-        if job is None:
-            raise HTTPException(status_code=404, detail="VOD analysis job not found")
-        return VodAnalysisJobResponse.model_validate(job)
-
-    @application.post(
-        "/vod-inspector",
-        response_model=VodAnalysisStartResponse,
-        status_code=status.HTTP_202_ACCEPTED,
-    )
-    def create_vod_inspector(payload: VodAnalysisCreate, request: Request) -> VodAnalysisStartResponse:
-        return create_vod_analysis(payload, request)
 
     @application.get("/vod-inspector/{job_id}", response_model=VodInspectorResponse)
     def get_vod_inspector(job_id: str) -> VodInspectorResponse:
@@ -226,9 +260,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 load_profile(configured.data_dir / "profiles", payload.streamer_profile)
             except ProfileValidationError as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if payload.source_job_id:
+            source_job = store.get(payload.source_job_id)
+            if source_job is None:
+                raise HTTPException(status_code=422, detail="Raw preview job not found")
+            if source_job["status"] not in {"ready", "completed"} or not source_job.get(
+                "source_clip_path"
+            ):
+                raise HTTPException(status_code=409, detail="Raw preview is not ready yet")
+            if (
+                source_job["source_url"] != str(payload.source_url)
+                or source_job["start_seconds"] != start_seconds
+                or source_job["end_seconds"] != end_seconds
+            ):
+                raise HTTPException(
+                    status_code=422, detail="Raw preview source and interval do not match"
+                )
+        job_id = str(uuid.uuid4())
         job = store.create(
             {
-                "id": str(uuid.uuid4()),
+                "id": job_id,
                 "source_url": str(payload.source_url),
                 "start_seconds": start_seconds,
                 "end_seconds": end_seconds,
@@ -244,6 +295,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "streamer_profile": payload.streamer_profile,
                 "demo": payload.demo,
                 "youtube_title": payload.youtube_title,
+                "source_job_id": payload.source_job_id,
+                "job_kind": payload.job_kind,
+                "workflow_type": payload.workflow_type,
+                "project_id": payload.project_id or job_id,
             }
         )
         request.app.state.processor.submit(job["id"])

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
@@ -60,6 +60,11 @@ class ScoreBreakdown(BaseModel):
     title_specificity: float = Field(ge=0, le=1)
     emotional_energy: float = Field(ge=0, le=1)
     story_or_opinion_signal: float = Field(ge=0, le=1)
+    semantic_coherence: float = Field(default=0, ge=0, le=1)
+    title_grounding: float = Field(default=0, ge=0, le=1)
+    keyword_quality: float = Field(default=0, ge=0, le=1)
+    topic_specificity: float = Field(default=0, ge=0, le=1)
+    summary_grounding: float = Field(default=0, ge=0, le=1)
     penalties: list[str] = Field(default_factory=list)
 
 
@@ -75,6 +80,12 @@ class ClipCandidate(BaseModel):
     score: float = Field(ge=0, le=100)
     score_breakdown: ScoreBreakdown
     transcript_preview: str
+    grounding_score: float = Field(default=0, ge=0, le=1)
+    grounding_evidence: list[str] = Field(default_factory=list)
+    unsupported_terms: list[str] = Field(default_factory=list)
+    representative_sentences: list[str] = Field(default_factory=list)
+    opening_preview: list[str] = Field(default_factory=list)
+    closing_preview: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     overlap_ratio: float = Field(default=0, ge=0, le=1)
 
@@ -87,6 +98,7 @@ class TopicBlock(BaseModel):
     keywords: list[str]
     coherence_score: float = Field(ge=0, le=1)
     boundary_reasons: list[str]
+    representative_sentences: list[str] = Field(default_factory=list)
     transcript: str
 
 
@@ -119,6 +131,31 @@ class VodAnalysisResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class TranscriptionSummary(BaseModel):
+    duration_seconds: float = Field(ge=0)
+    language: str
+    model: str
+    segment_count: int = Field(ge=0)
+    chunk_count: int = Field(ge=0)
+
+
+class TopicAnalysisResult(BaseModel):
+    pipeline_version: str
+    fixture: bool = False
+    analysis_strategy: Literal["transcript_topics"] = "transcript_topics"
+    phase_detection_strategy: Literal["not_required"] = "not_required"
+    requires_coarse_timeline: Literal[False] = False
+    vod: CoarseVodMetadata
+    transcription: TranscriptionSummary
+    topics: list[TopicBlock]
+    candidates: list[ClipCandidate] = Field(max_length=10)
+    semantic_backend: str
+    semantic_backend_details: dict[str, Any] = Field(default_factory=dict)
+    cache_keys: dict[str, str] = Field(default_factory=dict)
+    timings: dict[str, float] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class VodAnalysisStartResponse(BaseModel):
     job_id: str
     cached: bool
@@ -138,7 +175,16 @@ class VodAnalysisJobResponse(BaseModel):
     cached: bool
     fixture_mode: bool
     warnings: list[str]
-    result: VodAnalysisResult | PhasedAnalysisResult | CoarseAnalysisResult | None
+    # The final mapping keeps historical pipeline payloads readable while the typed variants
+    # remain authoritative for current jobs.
+    result: (
+        VodAnalysisResult
+        | TopicAnalysisResult
+        | PhasedAnalysisResult
+        | CoarseAnalysisResult
+        | dict[str, Any]
+        | None
+    )
     error_message: str | None = None
     completed_windows: int = 0
     total_windows: int = 0
